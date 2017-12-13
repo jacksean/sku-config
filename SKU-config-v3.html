@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="gb2312">
+	<title>生成表格</title>
+	<style> 
+		.table-c table{border-right:1px solid #F00;border-bottom:1px solid #F00}
+		.table-c table td{border-left:1px solid #F00;border-top:1px solid #F00} 
+	</style>
+</head>
+<body>
+
+<div class="add_attr_form">
+	<label>属性ID</label><input id="attrId" />
+	<label>属性名</label><input id="attrName" />
+	<input id="add_attr" type="button" value="添加属性" />
+</div>
+
+<div class="add_attrVal_form">
+	<label>属性ID</label><input id="attrId" />
+	<label>属性值ID</label><input id="attrVid" />
+	<label>属性值</label><input id="attrVal" />
+	<input id="add_attrVal" type="button" value="添加属性值" />
+</div>
+
+<div class="del_attr_form">
+	<label>属性ID</label><input id="attrId" />
+	<input id="del_attr" type="button" value="删除属性" />
+</div>
+
+<div class="del_attrVal_form">
+	<label>属性ID</label><input id="attrId" />
+	<label>属性值ID</label><input id="attrVid" />
+	<input id="del_attrVal" type="button" value="删除属性值" />
+</div>
+
+<div class="getSkuCfgDetails">
+	<input id="getSkuCfgDetails" type="button" value="获取SKU配置数据" />
+</div>
+
+<div class="table_content table-c">
+	
+</div>
+
+<div class="table_content2 table-c">
+	
+</div>
+<script type="text/javascript" src="http://code.jquery.com/jquery-latest.js"></script>
+<script type="text/javascript">
+$(function() {
+	
+	SkuCfg.prototype.printJsonStr = function(obj){
+		console.log(JSON.stringify(obj));
+	};
+		
+	
+	function SkuCfg(config){
+		var container = config.container;
+		var mergeColCell = config.mergeColCell;
+		var attrCombs = [];
+		var attrs = [];
+		var skus = {};
+		var table;
+		this.fn = {};
+		/*
+		初始化
+		initAttrs => [{"attrId":"attr1","attrName":"颜色","attrVals":[{"attrVid" : "attr1-1" , "attrVal" : "红色"}]}]
+		initSkus => ["skuId":"20001234","price":"10.01","salePrice":"9.9","attrVals":[{"attrVid" : "attr1-1" , "attrVal" : "红色"}] , "stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]]
+		*/
+		this.fn.init = function(initAttrs,initSkus){
+			if(initAttrs != null){
+				for(var i=0;i<initAttrs.length;i++){
+					addAttr(initAttrs[i].attrId,initAttrs[i].attrName);
+					for(var j=0;j<initAttrs[i].attrVals.length;j++){
+						addAttrVal(initAttrs[i].attrId,initAttrs[i].attrVals[j].attrVid,initAttrs[i].attrVals[j].attrVal,false);
+					}
+				}
+			}
+			resetSkus();
+			if(initSkus != null){			
+				for(var i=0;i<initSkus.length;i++){
+					var combIdxArr = [];
+					initSkus[i].attrVals.forEach(function(value){
+						combIdxArr.push(value.attrVid);
+					});
+					var combIdx = buildCombIdx(combIdxArr);
+					skus[combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "stocks":[]};
+					skus[combIdx].skuId = initSkus[i].skuId;
+					skus[combIdx].price = initSkus[i].price;
+					skus[combIdx].salePrice = initSkus[i].salePrice;
+					for(var j=0;j<initSkus[i].stocks.length;j++){
+						var stock = {};
+						stock.stockId = initSkus[i].stocks[j].stockId;
+						stock.stockName = initSkus[i].stocks[j].stockName;
+						skus[combIdx].stocks.push(stock);
+					}
+				}
+			}
+			table = initTable();
+			refreshContainer();
+		};
+		
+		this.fn.addAttr = addAttr;
+		//添加单个属性
+		function addAttr(attrId,attrName){
+			if(getAttrObj(attrId) != null){
+				console.log("addAttr => 属性("+attrId+")已存在");
+				return;
+			}
+			var attrObj = {};
+			attrObj["attrId"] = attrId;
+			attrObj["attrName"] = attrName;
+			attrObj["attrVals"] = [];
+			if(typeof(attrs) == "undefined"){
+				attrs = [];
+			}
+			attrs.push(attrObj);
+		};
+		
+		this.fn.addAttrValBatch = addAttrValBatch;
+		//批量添加属性值
+		function addAttrValBatch(attrValArray,refresh){
+			attrValArray.forEach(function(attrVal){
+				addAttrVal(attrVal.attrId,attrVal.attrVid,attrVal.attrVal,false);
+			});
+			if(typeof(refresh) == "undefined" || refresh){
+				refreshContainer();
+			}
+		};
+
+		this.fn.addAttrVal = addAttrVal;
+		//添加单个属性值
+		function addAttrVal(attrId,attrVid,attrVal,refresh){//新增属性值
+			var attrObj = getAttrObj(attrId);
+			if(attrObj == null){
+				console.log("addAttrVal => 属性("+attrId+")不存在");
+				return;
+			}
+			var attrValObj = getAttrValObj(attrId,attrVid);
+			if(attrValObj != null){
+				console.log("addAttrVal => 属性("+attrId+"),属性值("+attrVid+"已存在");
+				return;
+			}
+
+			var attrValObj = {};
+			attrValObj["attrId"] = attrId;
+			attrValObj["attrVid"] = attrVid;
+			attrValObj["attrVal"] = attrVal;	
+			attrObj.attrVals.push(attrValObj);
+			if(typeof(refresh) == "undefined" || refresh){
+				refreshContainer();
+			}
+		};
+		
+		this.fn.delAttr = delAttr;
+		//删除属性
+		function delAttr(attrId){
+			for(var i=0; i<attrs.length; i++) {
+				if(attrs[i].attrId == attrId) {
+					var refresh = false;
+					if(attrs[i].attrVals.length > 0){
+						resetSkus();
+						refresh = true;
+					}
+					attrs.splice(i, 1);
+					if(refresh){
+						refreshContainer();
+					}
+					break;
+				}
+			}	
+		};
+
+		this.fn.delAttrVal = delAttrVal;
+		//删除属性值
+		function delAttrVal(attrId,attrVid){
+			var combinsArgs = [];
+			var delSuc = false;
+			attrs.forEach(function(value, index){
+				if(value.attrId == attrId){
+					for(var i=0; i<value.attrVals.length; i++) {
+						if(value.attrVals[i].attrVid == attrVid) {
+						  var delValArray = [];
+						  delSuc = true;
+						  delValArray.push(value.attrVals[i]);
+						  combinsArgs.push(delValArray); 
+						  value.attrVals.splice(i, 1);
+						  break;
+						}
+					}
+				}else{
+					if(value.attrVals.length > 0){
+						combinsArgs.push(value.attrVals);
+					}
+				}
+			});
+			if(delSuc && combinsArgs.length > 0){
+				if(combinsArgs.length == 1){
+					var combIdx = buildAttrValCombIdx(combinsArgs[0]);
+					delSku(combIdx);
+				}else{
+					var a = descartes(combinsArgs);
+					a.forEach(function(value){
+						var combIdx = buildAttrValCombIdx(value);
+						delSku(combIdx);
+					});
+				}
+				refreshContainer();
+			}
+		};
+		
+		this.fn.onSkuPriceChanged = onSkuPriceChanged;
+		function onSkuPriceChanged(combIdx,price){
+			if (skus.hasOwnProperty(combIdx)){
+				skus[combIdx]["price"] = price;
+			}else{
+				console.log("onSkuPriceChanged => SKU组合("+combIdx+")不存在");	
+			}
+		};
+		this.fn.onSkuSalePriceChanged = onSkuSalePriceChanged;
+		function onSkuSalePriceChanged(combIdx,salePrice){
+			if (skus.hasOwnProperty(combIdx)){
+				skus[combIdx]["salePrice"] = salePrice;
+			}else{
+				console.log("onSkuSalePriceChanged => SKU组合("+combIdx+")不存在");	
+			}	
+		};
+		this.fn.onSkuStockAdd = onSkuStockAdd;
+		function onSkuStockAdd(combIdx,stockId,stockName){
+			if (skus.hasOwnProperty(combIdx)){
+				var stock = {};
+				stock["stockId"] = stockId;
+				stock["stockName"] = stockName;
+				skus[combIdx]["stocks"].push(stock);
+			}else{
+				console.log("onSkuStockAdd => SKU组合("+combIdx+")不存在");	
+			}	
+		};
+		this.fn.onSkuStockDel = onSkuStockDel;
+		function onSkuStockDel(combIdx,stockId){
+			if (skus.hasOwnProperty(combIdx)){
+				var stocks = skus[combIdx]["stocks"];
+				for(var i=0;i<stocks.length;i++){
+					if(stocks[i]["stockId"] == stockId){
+						stocks.splice(i, 1);
+						break;
+					}
+				}
+			}else{
+				console.log("onSkuStockDel => SKU组合("+combIdx+")不存在");	
+			}	
+		};
+		//获取配置界面结果集
+		this.fn.getSkuCfgDetails = function(){
+			var result = {"attrSet":[],"skuDetails":[]};
+			for(var i=0;i<attrs.length;i++){
+				result["attrSet"].push(attrs[i]);
+			}
+			for(var i=0;i<attrCombs.length;i++){
+				var skuDetail = {};
+				skuDetail["attrSet"] = [];
+				for(var j=0;j<attrCombs[i].attrVals.length;j++){
+					skuDetail["attrSet"].push(attrCombs[i].attrVals[j]);
+				}
+				var combIdx = attrCombs[i].combIdx;
+				skuDetail["skuId"] = skus[combIdx]["skuId"];
+				skuDetail["price"] = skus[combIdx]["price"];
+				skuDetail["salePrice"] = skus[combIdx]["salePrice"];
+				skuDetail["stocks"] = skus[combIdx]["stocks"];
+				result["skuDetails"].push(skuDetail);
+			}
+			return result;
+		};
+
+		
+		//查找属性对象
+		function getAttrObj(attrId){
+			if(typeof(attrs) != "undefined"){
+				for(var i=0; i<attrs.length; i++) {
+					if(attrs[i].attrId == attrId) {
+					  return attrs[i]
+					}
+				}
+			}
+			return null;
+		};
+		
+		//查找属性值对象
+		function getAttrValObj(attrId,attrVid){
+			for(var i=0; i<attrs.length; i++) {
+				if(attrs[i].attrId == attrId) {
+					for(var j=0; j<attrs[i].attrVals.length; j++) {
+						if(attrs[i].attrVals[j].attrVid == attrVid) {
+							return attrs[i].attrVals[j];
+						}
+					}
+				}
+			}
+			return null;
+		};
+
+		//构建属性值组合唯一索引 ["1","2"]
+		function buildCombIdx(attrValIdArray){
+			attrValIdArray.sort();
+			return attrValIdArray.join(',');
+		};
+
+		//构建属性值组合唯一索引 属性值对象数组
+		function buildAttrValCombIdx(attrValArray){
+			var combIdx = [];
+			attrValArray.forEach(function(value){
+				combIdx.push(value.attrVid);
+			});
+			return buildCombIdx(combIdx);
+		};
+
+		
+		//重置SKU数据
+		function resetSkus(){
+			skus = {};
+		};
+		
+		//删除SKU
+		function delSku(combIdx){
+			delete skus[combIdx];
+		};
+		
+		//笛卡尔组合
+		function descartes(attrValArrays){	
+			var recursiveResult = [];
+			var curList = [];
+			recursive(attrValArrays,recursiveResult,0,curList);
+			return recursiveResult;
+		};
+
+		//笛卡尔递归
+		function recursive(dimValue,result,layer,curList){
+			if (layer < dimValue.length - 1) {  
+				if (dimValue[layer].length == 0) {  
+					recursive(dimValue, result, layer + 1, curList);  
+				} else {
+					for (var i = 0; i < dimValue[layer].length; i++) {
+						var list = [];
+						list = list.concat(curList);
+						list.push(dimValue[layer][i]);  
+						recursive(dimValue, result, layer + 1, list);  
+					} 
+				}  
+			}else if (layer == dimValue.length - 1) {  
+				if (dimValue[layer].length == 0) {
+					result.push(curList);			
+				} else {  
+					for (var i = 0; i < dimValue[layer].length; i++) {  
+						var list = [].concat(curList);
+						list.push(dimValue[layer][i]);
+						result.push(list);
+					}  
+				}  
+			}
+		};
+
+		//执行属性笛卡尔组合
+		function doAttrCombing(){
+			//清空属性组合数据
+			if(typeof(attrCombs) == "undefined"){
+				attrCombs = [];
+			}
+			attrCombs.splice(0,attrCombs.length);
+			var combinsArgs = [];
+			if(typeof(attrs) == "undefined" || attrs.length == 0){
+				return;
+			}
+			if(attrs.length == 1){
+				for(var i=0;i<attrs[0].attrVals.length;i++){
+					var attrCombObj = {"combIdx":"","attrVals":[]};
+					attrCombObj.combIdx = attrs[0].attrVals[i].attrVid;
+					attrCombObj.attrVals.push(attrs[0].attrVals[i]);
+					attrCombs.push(attrCombObj);
+					//初始化sku数据映射
+					if(!(attrCombObj.combIdx in skus))
+						skus[attrCombObj.combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "stocks":[]}
+				}
+				return;
+			}
+			for(var i=0;i < attrs.length;i++){
+				combinsArgs.push(attrs[i].attrVals);
+			}
+			var a = descartes(combinsArgs);		
+			a.forEach(function(value){
+				var combIdx = [];
+				var attrCombObj = {"combIdx":"","attrVals":[]};
+				value.forEach(function(attrVal){
+					attrCombObj.attrVals.push(attrVal);
+					combIdx.push(attrVal.attrVid);
+				});
+				attrCombObj.combIdx = buildCombIdx(combIdx);
+				attrCombs.push(attrCombObj);
+				//初始化sku数据映射
+				if(!(attrCombObj.combIdx in skus))
+					skus[attrCombObj.combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "stocks":[]}
+			});
+		};
+		
+		//刷新table容器
+		function refreshContainer(){
+			doAttrCombing();
+			table.reset(container);
+		};
+		
+		//初始化表格
+		function initTable(){
+			//先初始化属性组合
+			//var _this = this;
+			return {
+				//重置表格容器
+				reset : function(container){
+					container.html('');
+					this.tableTag = $('<table id="skuTable" border="0" cellspacing="0" cellpadding="0"></table>');
+					this.tableTag.appendTo(container);
+					this.thead = $('<thead></thead>');
+					this.thead.appendTo(this.tableTag);
+					this.trHead = $('<tr></tr>');
+					this.trHead.appendTo(this.thead);
+					this.tbody = $('<tbody></tbody>');
+					this.tbody.appendTo(this.tableTag);
+					this.thPrice = $('<th>价格</th>')
+					this.thStock = $('<th>库存</th>')
+					this.thPrice.hide();
+					this.thStock.hide();
+					this.thPrice.appendTo(this.trHead);
+					this.thStock.appendTo(this.trHead);
+					this.renderHead();
+					this.renderBody();
+				},
+				//渲染表格头
+				renderHead : function(){
+					if(typeof(attrs) != "undefined"){
+						for(var i=0;i<attrs.length;i++){
+							if(attrs[i].attrVals.length > 0){
+								this.addColum(attrs[i]);
+								this.thPrice.show();
+								this.thStock.show();
+							}
+						}
+					}				
+				},
+				//渲染表格内容
+				renderBody : function(){
+					for(var i=0;i<attrCombs.length;i++){
+						var attrComb = attrCombs[i];
+						this.addRow(attrComb,skus[attrComb.combIdx]);
+					}
+					if(attrCombs.length > 0){
+						this.adjustCell();
+						
+						$(".sku_price").unbind('input propertychange').bind('input propertychange',function(){
+							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
+							onSkuPriceChanged(combIdx,$(this).val());
+						});
+
+						$(".sku_salePrice").unbind('input propertychange').bind('input propertychange',function(){
+							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
+							onSkuSalePriceChanged(combIdx,$(this).val());
+						});
+					}
+				},
+				addColum : function(attr){
+					var str = '<th data-attrId="'+attr.attrId+'">' + attr.attrName + '</th>';
+					this.thPrice.before(str);
+				},
+				addRow : function(attrComb,sku){
+					var trAttrComb = $('<tr></tr>');
+					for(var i=0;i<attrs.length;i++){
+						attrComb.attrVals.forEach(function(attrVal, index){
+							if(attrVal.attrId == attrs[i].attrId)
+								trAttrComb.append('<td data-attr-id="'+attrVal.attrId+'" data-atte-vid="' +attrVal.attrVid+ '" >'+attrVal.attrVal+'</td>');
+						});
+					};			
+					trAttrComb.attr("data-attr-idx",attrComb.combIdx);
+					trAttrComb.attr("data-sku-id",sku.skuId)
+					trAttrComb.append('<td><label>原价:</label><input class="sku_price" style="width:80px;" value="'+sku.price+'" />  <label>优惠价:</label><input class="sku_salePrice" style="width:80px;" value="'+sku.salePrice+'" /></td>');
+					trAttrComb.append('<td>库存编辑容器</td>');
+					trAttrComb.appendTo(this.tbody);
+				},
+				adjustCell : function(){
+					if(typeof(mergeColCell) != "undefined" && mergeColCell){
+						var colNums = $('th',this.trHead).length - 2;
+						if(colNums > 0){
+							for(var i=0;i<colNums;i++){
+								this.mergeColCell(i);
+							}
+						}
+					}
+				},
+				mergeColCell : function(colIdx){
+					var _this = this;
+					var tmp = {};
+					tmp["col-content"] = "";
+					tmp["col-rowspan"] = 1;
+					tmp["col-td"] = $();
+					tmp.trNum = $("tr",_this.tbody).length;
+					$("tr",_this.tbody).each(function(index){
+						var td = $('td:eq(' + colIdx + ')', this);
+						var currentAttrVal = td.attr('data-atte-vid');
+						if (tmp["col-content"] == '') {
+							tmp["col-content"] = currentAttrVal;
+							tmp["col-td"] = td;
+						} else {
+							if (tmp["col-content"] == currentAttrVal) {
+								var rowspan = tmp["col-rowspan"] + 1;
+								tmp["col-rowspan"] = rowspan;
+								td.hide();
+								if (++index == tmp.trNum)
+									tmp["col-td"].attr('rowspan', tmp["col-rowspan"]);
+							}
+							else {
+								if (tmp["col-rowspan"] != 1) {
+									tmp["col-td"].attr('rowspan', tmp["col-rowspan"]);
+								}
+								tmp["col-td"] = td;
+								tmp["col-content"] = $(td).attr('data-atte-vid');
+								tmp["col-rowspan"] = 1;
+							}
+						}
+					});
+				}
+			};	
+		};
+	};
+
+
+	var initAttrExampleStr = '[{"attrId":"attr1","attrName":"颜色","attrVals":[{"attrVid" : "attr1-1" , "attrVal" : "红色"}]},{"attrId":"attr2","attrName":"容量","attrVals":[{"attrVid" : "attr2-1" , "attrVal" : "16G"},{"attrVid" : "attr2-2" , "attrVal" : "32G"}]}]';
+	var initSkusExampleStr = '[{"skuId":"20001234","price":"10.01","salePrice":"9.9","attrVals":[{"attrVid":"attr1-1","attrVal":"红色"},{"attrVid":"attr2-1","attrVal":"16G"}],"stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]},{"skuId":"20001235","price":"11.01","salePrice":"8.9","attrVals":[{"attrVid":"attr2-2","attrVal":"32G"},{"attrVid":"attr1-1","attrVal":"红色"}],"stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]}]';
+	var initAttrs = JSON.parse(initAttrExampleStr);
+	var initSkus = JSON.parse(initSkusExampleStr);
+
+	var cfg1 = new SkuCfg({"container" : $(".table_content"),"mergeColCell" : true});
+	cfg1.fn.init(initAttrs,initSkus);
+
+	var cfg2 = new SkuCfg({"container" : $(".table_content2"),"mergeColCell" : true});
+	cfg2.fn.init(initAttrs,initSkus);
+
+	$("#add_attr").click(function(){
+		var attrId = $('.add_attr_form #attrId').val();
+		var attrName = $('.add_attr_form #attrName').val();
+		cfg1.fn.addAttr(attrId,attrName);
+		cfg2.addAttr(attrId,attrName);
+	});
+
+	$("#add_attrVal").click(function(){
+		var attrId = $('.add_attrVal_form #attrId').val();
+		var attrVid = $('.add_attrVal_form #attrVid').val();
+		var attrVal = $('.add_attrVal_form #attrVal').val();
+		cfg1.fn.addAttrVal(attrId,attrVid,attrVal);
+		cfg2.fn.addAttrVal(attrId,attrVid,attrVal);
+	});
+
+	$("#del_attr").click(function(){
+		var attrId = $('.del_attr_form #attrId').val();
+		cfg1.fn.delAttr(attrId);
+		cfg2.fn.delAttr(attrId);
+	});
+
+	$("#del_attrVal").click(function(){
+		var attrId = $('.del_attrVal_form #attrId').val();
+		var attrVid = $('.del_attrVal_form #attrVid').val();
+		cfg1.fn.delAttrVal(attrId,attrVid);
+		cfg2.fn.delAttrVal(attrId,attrVid);
+	});
+
+	$("#add_attrVal1").click(function(){
+		cfg1.fn.addAttr("attr2","容量");
+		cfg2.fn.addAttr("attr2","容量");
+	});
+
+	$("#getSkuCfgDetails").click(function(){
+		cfg1.printJsonStr(cfg1.fn.getSkuCfgDetails());
+	});
+})
+</script>
+</body>
+</html>
