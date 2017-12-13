@@ -105,7 +105,7 @@ $(function() {
 		function addAttr(attrId,attrName){
 			if(getAttrObj(attrId) != null){
 				console.log("addAttr => 属性("+attrId+")已存在");
-				return;
+				return false;
 			}
 			var attrObj = {};
 			attrObj["attrId"] = attrId;
@@ -115,6 +115,7 @@ $(function() {
 				attrs = [];
 			}
 			attrs.push(attrObj);
+			return true;
 		};
 		
 		this.fn.addAttrValBatch = addAttrValBatch;
@@ -134,12 +135,12 @@ $(function() {
 			var attrObj = getAttrObj(attrId);
 			if(attrObj == null){
 				console.log("addAttrVal => 属性("+attrId+")不存在");
-				return;
+				return false;
 			}
 			var attrValObj = getAttrValObj(attrId,attrVid);
 			if(attrValObj != null){
 				console.log("addAttrVal => 属性("+attrId+"),属性值("+attrVid+"已存在");
-				return;
+				return false;
 			}
 
 			var attrValObj = {};
@@ -150,6 +151,7 @@ $(function() {
 			if(typeof(refresh) == "undefined" || refresh){
 				refreshContainer();
 			}
+			return true;
 		};
 		
 		this.fn.delAttr = delAttr;
