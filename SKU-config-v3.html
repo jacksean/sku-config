@@ -52,6 +52,10 @@ $(function() {
 	SkuCfg.prototype.printJsonStr = function(obj){
 		console.log(JSON.stringify(obj));
 	};
+
+	SkuCfg.prototype.nullOrUndefine = function(obj){
+		return typeof(obj) == 'undefined' || obj == null
+	};
 		
 	
 	function SkuCfg(config){
@@ -61,6 +65,7 @@ $(function() {
 		var attrs = [];
 		var skus = {};
 		var table;
+		var _that = this;
 		this.fn = {};
 		/*
 		初始化
@@ -230,27 +235,37 @@ $(function() {
 		this.fn.onSkuStockAdd = onSkuStockAdd;
 		function onSkuStockAdd(combIdx,stockId,stockName){
 			if (skus.hasOwnProperty(combIdx)){
+				if(_that.nullOrUndefine(stockId) || _that.nullOrUndefine(stockName)){
+					return false;
+				}
 				var stock = {};
 				stock["stockId"] = stockId;
 				stock["stockName"] = stockName;
+				for(var i=0;i<skus[combIdx]["stocks"].length;i++){
+					if(skus[combIdx]["stocks"][i]["stockId"] == stockId){
+						return false;
+					}
+				}
 				skus[combIdx]["stocks"].push(stock);
+				return true;
 			}else{
 				console.log("onSkuStockAdd => SKU组合("+combIdx+")不存在");	
-			}	
+			}
+			return false;
 		};
 		this.fn.onSkuStockDel = onSkuStockDel;
 		function onSkuStockDel(combIdx,stockId){
 			if (skus.hasOwnProperty(combIdx)){
-				var stocks = skus[combIdx]["stocks"];
-				for(var i=0;i<stocks.length;i++){
-					if(stocks[i]["stockId"] == stockId){
-						stocks.splice(i, 1);
-						break;
+				for(var i=0;i<skus[combIdx]["stocks"].length;i++){
+					if(skus[combIdx]["stocks"][i]["stockId"] == stockId){		
+						skus[combIdx]["stocks"].splice(i, 1);
+						return true;
 					}
 				}
 			}else{
 				console.log("onSkuStockDel => SKU组合("+combIdx+")不存在");	
-			}	
+			}
+			return false;
 		};
 		//获取配置界面结果集
 		this.fn.getSkuCfgDetails = function(){
@@ -464,6 +479,29 @@ $(function() {
 							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 							onSkuSalePriceChanged(combIdx,$(this).val());
 						});
+
+						$(".del_stock").unbind('click').bind('click',function(){
+							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
+							if(onSkuStockDel(combIdx,$(this).prev('label').attr('data-stock-id'))){
+								$(this).parent('div').remove();
+							}
+						});
+
+						$(".add_stock").unbind('click').bind('click',function(){
+							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
+							var stockId = $(this).parent().children('input[name="stockId"]').val();
+							var stockName = $(this).parent().children('input[name="stockName"]').val();
+							if(onSkuStockAdd(combIdx,stockId,stockName)){
+								$(this).parent('div').before('<div><label data-stock-id="'+stockId+'">'+stockName+'</label><input class="del_stock" type="button" value="删除"/> <br /></div>')
+							}
+
+							$(".del_stock").unbind('click').bind('click',function(){
+								var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
+								if(onSkuStockDel(combIdx,$(this).prev('label').attr('data-stock-id'))){
+									$(this).parent('div').remove();
+								}
+							});
+						});
 					}
 				},
 				addColum : function(attr){
@@ -481,7 +519,12 @@ $(function() {
 					trAttrComb.attr("data-attr-idx",attrComb.combIdx);
 					trAttrComb.attr("data-sku-id",sku.skuId)
 					trAttrComb.append('<td><label>原价:</label><input class="sku_price" style="width:80px;" value="'+sku.price+'" />  <label>优惠价:</label><input class="sku_salePrice" style="width:80px;" value="'+sku.salePrice+'" /></td>');
-					trAttrComb.append('<td>库存编辑容器</td>');
+					var tdStock = $('<td></td>');
+					for(var i=0;i<sku.stocks.length;i++){
+						tdStock.append('<div><label data-stock-id="'+sku.stocks[i].stockId+'">'+sku.stocks[i].stockName+'</label><input class="del_stock" type="button" value="删除"/> <br /></div>');
+					}
+					tdStock.append('<div><input style="width:40px;" placeholder="库存ID" name="stockId"/><input style="width:40px;" placeholder="库存名" name="stockName"/><input class="add_stock" type="button" value="增加"/></div>');
+					tdStock.appendTo(trAttrComb)
 					trAttrComb.appendTo(this.tbody);
 				},
 				adjustCell : function(){
@@ -539,14 +582,14 @@ $(function() {
 	var cfg1 = new SkuCfg({"container" : $(".table_content"),"mergeColCell" : true});
 	cfg1.fn.init(initAttrs,initSkus);
 
-	var cfg2 = new SkuCfg({"container" : $(".table_content2"),"mergeColCell" : true});
-	cfg2.fn.init(initAttrs,initSkus);
+	//var cfg2 = new SkuCfg({"container" : $(".table_content2"),"mergeColCell" : true});
+	//cfg2.fn.init(initAttrs,initSkus);
 
 	$("#add_attr").click(function(){
 		var attrId = $('.add_attr_form #attrId').val();
 		var attrName = $('.add_attr_form #attrName').val();
 		cfg1.fn.addAttr(attrId,attrName);
-		cfg2.addAttr(attrId,attrName);
+		//cfg2.addAttr(attrId,attrName);
 	});
 
 	$("#add_attrVal").click(function(){
@@ -554,25 +597,25 @@ $(function() {
 		var attrVid = $('.add_attrVal_form #attrVid').val();
 		var attrVal = $('.add_attrVal_form #attrVal').val();
 		cfg1.fn.addAttrVal(attrId,attrVid,attrVal);
-		cfg2.fn.addAttrVal(attrId,attrVid,attrVal);
+		//cfg2.fn.addAttrVal(attrId,attrVid,attrVal);
 	});
 
 	$("#del_attr").click(function(){
 		var attrId = $('.del_attr_form #attrId').val();
 		cfg1.fn.delAttr(attrId);
-		cfg2.fn.delAttr(attrId);
+		//cfg2.fn.delAttr(attrId);
 	});
 
 	$("#del_attrVal").click(function(){
 		var attrId = $('.del_attrVal_form #attrId').val();
 		var attrVid = $('.del_attrVal_form #attrVid').val();
 		cfg1.fn.delAttrVal(attrId,attrVid);
-		cfg2.fn.delAttrVal(attrId,attrVid);
+		//cfg2.fn.delAttrVal(attrId,attrVid);
 	});
 
 	$("#add_attrVal1").click(function(){
 		cfg1.fn.addAttr("attr2","容量");
-		cfg2.fn.addAttr("attr2","容量");
+		//cfg2.fn.addAttr("attr2","容量");
 	});
 
 	$("#getSkuCfgDetails").click(function(){
