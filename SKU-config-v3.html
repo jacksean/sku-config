@@ -56,11 +56,19 @@ $(function() {
 	SkuCfg.prototype.nullOrUndefine = function(obj){
 		return typeof(obj) == 'undefined' || obj == null
 	};
+
+	SkuCfg.prototype.getSafeStr = function(obj){
+		if(this.nullOrUndefine(obj)){
+			return "";
+		}
+		return obj;
+	};
 		
 	
-	function SkuCfg(config){
-		var container = config.container;
-		var mergeColCell = config.mergeColCell;
+	function SkuCfg(cfg){
+		var config = cfg;
+		//var container = config.container;
+		//var mergeColCell = config.mergeColCell;
 		var attrCombs = [];
 		var attrs = [];
 		var skus = {};
@@ -421,7 +429,7 @@ $(function() {
 		//刷新table容器
 		function refreshContainer(){
 			doAttrCombing();
-			table.reset(container);
+			table.reset(config.container);
 		};
 		
 		//初始化表格
@@ -430,10 +438,10 @@ $(function() {
 			//var _this = this;
 			return {
 				//重置表格容器
-				reset : function(container){
-					container.html('');
-					this.tableTag = $('<table id="skuTable" border="0" cellspacing="0" cellpadding="0"></table>');
-					this.tableTag.appendTo(container);
+				reset : function(tbContainer){
+					tbContainer.html('');
+					this.tableTag = $('<table id="skuTable" border="0" cellspacing="0" cellpadding="0" class="'+_that.getSafeStr(config.tbClass)+'"></table>');
+					this.tableTag.appendTo(tbContainer);
 					this.thead = $('<thead></thead>');
 					this.thead.appendTo(this.tableTag);
 					this.trHead = $('<tr></tr>');
@@ -470,24 +478,24 @@ $(function() {
 					if(attrCombs.length > 0){
 						this.adjustCell();
 						
-						$(".sku_price").unbind('input propertychange').bind('input propertychange',function(){
+						$(".sku_price",config.container).unbind('input propertychange').bind('input propertychange',function(){
 							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 							onSkuPriceChanged(combIdx,$(this).val());
 						});
 
-						$(".sku_salePrice").unbind('input propertychange').bind('input propertychange',function(){
+						$(".sku_salePrice",config.container).unbind('input propertychange').bind('input propertychange',function(){
 							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 							onSkuSalePriceChanged(combIdx,$(this).val());
 						});
 
-						$(".del_stock").unbind('click').bind('click',function(){
+						$(".del_stock",config.container).unbind('click').bind('click',function(){
 							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 							if(onSkuStockDel(combIdx,$(this).prev('label').attr('data-stock-id'))){
 								$(this).parent('div').remove();
 							}
 						});
 
-						$(".add_stock").unbind('click').bind('click',function(){
+						$(".add_stock",config.container).unbind('click').bind('click',function(){
 							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 							var stockId = $(this).parent().children('input[name="stockId"]').val();
 							var stockName = $(this).parent().children('input[name="stockName"]').val();
@@ -495,7 +503,7 @@ $(function() {
 								$(this).parent('div').before('<div><label data-stock-id="'+stockId+'">'+stockName+'</label><input class="del_stock" type="button" value="删除"/> <br /></div>')
 							}
 
-							$(".del_stock").unbind('click').bind('click',function(){
+							$(".del_stock",config.container).unbind('click').bind('click',function(){
 								var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 								if(onSkuStockDel(combIdx,$(this).prev('label').attr('data-stock-id'))){
 									$(this).parent('div').remove();
@@ -505,30 +513,30 @@ $(function() {
 					}
 				},
 				addColum : function(attr){
-					var str = '<th data-attrId="'+attr.attrId+'">' + attr.attrName + '</th>';
-					this.thPrice.before(str);
+					var thAttr = '<th data-attrId="'+attr.attrId+'">' + attr.attrName + '</th>';
+					this.thPrice.before(thAttr);
 				},
 				addRow : function(attrComb,sku){
-					var trAttrComb = $('<tr></tr>');
+					var trSku = $('<tr></tr>');
 					for(var i=0;i<attrs.length;i++){
 						attrComb.attrVals.forEach(function(attrVal, index){
 							if(attrVal.attrId == attrs[i].attrId)
-								trAttrComb.append('<td data-attr-id="'+attrVal.attrId+'" data-atte-vid="' +attrVal.attrVid+ '" >'+attrVal.attrVal+'</td>');
+								trSku.append('<td data-attr-id="'+attrVal.attrId+'" data-atte-vid="' +attrVal.attrVid+ '" >'+attrVal.attrVal+'</td>');
 						});
 					};			
-					trAttrComb.attr("data-attr-idx",attrComb.combIdx);
-					trAttrComb.attr("data-sku-id",sku.skuId)
-					trAttrComb.append('<td><label>原价:</label><input class="sku_price" style="width:80px;" value="'+sku.price+'" />  <label>优惠价:</label><input class="sku_salePrice" style="width:80px;" value="'+sku.salePrice+'" /></td>');
+					trSku.attr("data-attr-idx",attrComb.combIdx);
+					trSku.attr("data-sku-id",sku.skuId)
+					trSku.append('<td><label>原价:</label><input class="sku_price" style="width:80px;" value="'+sku.price+'" />  <label>优惠价:</label><input class="sku_salePrice" style="width:80px;" value="'+sku.salePrice+'" /></td>');
 					var tdStock = $('<td></td>');
 					for(var i=0;i<sku.stocks.length;i++){
 						tdStock.append('<div><label data-stock-id="'+sku.stocks[i].stockId+'">'+sku.stocks[i].stockName+'</label><input class="del_stock" type="button" value="删除"/> <br /></div>');
 					}
 					tdStock.append('<div><input style="width:40px;" placeholder="库存ID" name="stockId"/><input style="width:40px;" placeholder="库存名" name="stockName"/><input class="add_stock" type="button" value="增加"/></div>');
-					tdStock.appendTo(trAttrComb)
-					trAttrComb.appendTo(this.tbody);
+					tdStock.appendTo(trSku)
+					trSku.appendTo(this.tbody);
 				},
 				adjustCell : function(){
-					if(typeof(mergeColCell) != "undefined" && mergeColCell){
+					if(typeof(config.mergeColCell) != "undefined" && config.mergeColCell){
 						var colNums = $('th',this.trHead).length - 2;
 						if(colNums > 0){
 							for(var i=0;i<colNums;i++){
