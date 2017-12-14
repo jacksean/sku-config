@@ -48,7 +48,7 @@
 <script type="text/javascript" src="http://code.jquery.com/jquery-latest.js"></script>
 <script type="text/javascript">
 $(function() {
-	
+
 	SkuCfg.prototype.printJsonStr = function(obj){
 		console.log(JSON.stringify(obj));
 	};
@@ -63,8 +63,22 @@ $(function() {
 		}
 		return obj;
 	};
-		
-	
+
+	//构建属性值组合唯一索引 ["1","2"]
+	SkuCfg.prototype.getIdCombIdx = function(attrValIds){
+		attrValIds.sort();
+		return attrValIds.join(',');
+	};
+
+	//构建属性值组合唯一索引 属性值对象数组
+	SkuCfg.prototype.getAttrValCombIdx = function(attrValArray){
+		var combIdx = [];
+		attrValArray.forEach(function(value){
+			combIdx.push(value.attrVid);
+		});
+		return this.getIdCombIdx(combIdx);
+	};
+
 	function SkuCfg(cfg){
 		var config = cfg;
 		//var container = config.container;
@@ -92,14 +106,11 @@ $(function() {
 			resetSkus();
 			if(initSkus != null){			
 				for(var i=0;i<initSkus.length;i++){
-					var combIdxArr = [];
-					initSkus[i].attrVals.forEach(function(value){
-						combIdxArr.push(value.attrVid);
-					});
-					var combIdx = buildCombIdx(combIdxArr);
-					skus[combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "stocks":[]};
+					var combIdx = _that.getAttrValCombIdx(initSkus[i].attrVals);
+					skus[combIdx] = {"skuId":"" , "price":"" , "salePrice":"" ,"status":"", "stocks":[]};
 					skus[combIdx].skuId = initSkus[i].skuId;
 					skus[combIdx].price = initSkus[i].price;
+					skus[combIdx].status = initSkus[i].status;
 					skus[combIdx].salePrice = initSkus[i].salePrice;
 					for(var j=0;j<initSkus[i].stocks.length;j++){
 						var stock = {};
@@ -211,12 +222,12 @@ $(function() {
 			});
 			if(delSuc && combinsArgs.length > 0){
 				if(combinsArgs.length == 1){
-					var combIdx = buildAttrValCombIdx(combinsArgs[0]);
+					var combIdx = _that.getAttrValCombIdx(combinsArgs[0]);
 					delSku(combIdx);
 				}else{
 					var a = descartes(combinsArgs);
 					a.forEach(function(value){
-						var combIdx = buildAttrValCombIdx(value);
+						var combIdx = _that.getAttrValCombIdx(value);
 						delSku(combIdx);
 					});
 				}
@@ -238,6 +249,14 @@ $(function() {
 				skus[combIdx]["salePrice"] = salePrice;
 			}else{
 				console.log("onSkuSalePriceChanged => SKU组合("+combIdx+")不存在");	
+			}	
+		};
+		this.fn.onSkuStatusChanged = onSkuStatusChanged;
+		function onSkuStatusChanged(combIdx,status){
+			if (skus.hasOwnProperty(combIdx)){
+				skus[combIdx]["status"] = status;
+			}else{
+				console.log("onSkuStatusChanged => SKU组合("+combIdx+")不存在");	
 			}	
 		};
 		this.fn.onSkuStockAdd = onSkuStockAdd;
@@ -291,6 +310,7 @@ $(function() {
 				skuDetail["skuId"] = skus[combIdx]["skuId"];
 				skuDetail["price"] = skus[combIdx]["price"];
 				skuDetail["salePrice"] = skus[combIdx]["salePrice"];
+				skuDetail["status"] = skus[combIdx]["status"];
 				skuDetail["stocks"] = skus[combIdx]["stocks"];
 				result["skuDetails"].push(skuDetail);
 			}
@@ -323,23 +343,7 @@ $(function() {
 			}
 			return null;
 		};
-
-		//构建属性值组合唯一索引 ["1","2"]
-		function buildCombIdx(attrValIdArray){
-			attrValIdArray.sort();
-			return attrValIdArray.join(',');
-		};
-
-		//构建属性值组合唯一索引 属性值对象数组
-		function buildAttrValCombIdx(attrValArray){
-			var combIdx = [];
-			attrValArray.forEach(function(value){
-				combIdx.push(value.attrVid);
-			});
-			return buildCombIdx(combIdx);
-		};
-
-		
+	
 		//重置SKU数据
 		function resetSkus(){
 			skus = {};
@@ -403,7 +407,7 @@ $(function() {
 					attrCombs.push(attrCombObj);
 					//初始化sku数据映射
 					if(!(attrCombObj.combIdx in skus))
-						skus[attrCombObj.combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "stocks":[]}
+						skus[attrCombObj.combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "status":"1", "stocks":[]}
 				}
 				return;
 			}
@@ -418,11 +422,11 @@ $(function() {
 					attrCombObj.attrVals.push(attrVal);
 					combIdx.push(attrVal.attrVid);
 				});
-				attrCombObj.combIdx = buildCombIdx(combIdx);
+				attrCombObj.combIdx = _that.getIdCombIdx(combIdx);
 				attrCombs.push(attrCombObj);
 				//初始化sku数据映射
 				if(!(attrCombObj.combIdx in skus))
-					skus[attrCombObj.combIdx] = {"skuId":"" , "price":"" , "salePrice":"" , "stocks":[]}
+					skus[attrCombObj.combIdx] = {"skuId":"" , "price":"" , "salePrice":"" ,"status":"1","stocks":[]}
 			});
 		};
 		
@@ -448,23 +452,27 @@ $(function() {
 					this.trHead.appendTo(this.thead);
 					this.tbody = $('<tbody></tbody>');
 					this.tbody.appendTo(this.tableTag);
-					this.thPrice = $('<th>价格</th>')
-					this.thStock = $('<th>库存</th>')
-					this.thPrice.hide();
-					this.thStock.hide();
-					this.thPrice.appendTo(this.trHead);
-					this.thStock.appendTo(this.trHead);
+					var thPrice = $('<th class="thcommon">价格</th>')
+					var thStock = $('<th class="thcommon">库存</th>')
+					var thStatus = $('<th class="thcommon">状态</th>')
+					thPrice.hide();
+					thStock.hide();
+					thStatus.hide();
+					thPrice.appendTo(this.trHead);
+					thStock.appendTo(this.trHead);
+					thStatus.appendTo(this.trHead);
 					this.renderHead();
 					this.renderBody();
 				},
 				//渲染表格头
 				renderHead : function(){
 					if(typeof(attrs) != "undefined"){
+						if(attrs.length > 0){
+							$(".thcommon",this.trHead).show();
+						}
 						for(var i=0;i<attrs.length;i++){
 							if(attrs[i].attrVals.length > 0){
 								this.addColum(attrs[i]);
-								this.thPrice.show();
-								this.thStock.show();
 							}
 						}
 					}				
@@ -486,6 +494,11 @@ $(function() {
 						$(".sku_salePrice",config.container).unbind('input propertychange').bind('input propertychange',function(){
 							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
 							onSkuSalePriceChanged(combIdx,$(this).val());
+						});
+
+						$(".sku_status",config.container).unbind('click').bind('click',function(){
+							var combIdx = $(this).parents('tr:last').attr('data-attr-idx');
+							onSkuStatusChanged(combIdx,$(this).prop("checked")?"1":"0");
 						});
 
 						$(".del_stock",config.container).unbind('click').bind('click',function(){
@@ -514,7 +527,8 @@ $(function() {
 				},
 				addColum : function(attr){
 					var thAttr = '<th data-attrId="'+attr.attrId+'">' + attr.attrName + '</th>';
-					this.thPrice.before(thAttr);
+					$(".thcommon:first",this.trHead).before(thAttr);
+					//this.thPrice.before(thAttr);
 				},
 				addRow : function(attrComb,sku){
 					var trSku = $('<tr></tr>');
@@ -533,11 +547,13 @@ $(function() {
 					}
 					tdStock.append('<div><input style="width:40px;" placeholder="库存ID" name="stockId"/><input style="width:40px;" placeholder="库存名" name="stockName"/><input class="add_stock" type="button" value="增加"/></div>');
 					tdStock.appendTo(trSku)
+					trSku.append('<td><input class="sku_status" type="checkbox" ' + ((sku.status == "1")?'checked':'') + ' /></td>');
 					trSku.appendTo(this.tbody);
 				},
 				adjustCell : function(){
 					if(typeof(config.mergeColCell) != "undefined" && config.mergeColCell){
-						var colNums = $('th',this.trHead).length - 2;
+						var commonNums = $(".thcommon",this.trHead).length;
+						var colNums = $('th',this.trHead).length - commonNums;
 						if(colNums > 0){
 							for(var i=0;i<colNums;i++){
 								this.mergeColCell(i);
@@ -583,7 +599,7 @@ $(function() {
 
 
 	var initAttrExampleStr = '[{"attrId":"attr1","attrName":"颜色","attrVals":[{"attrVid" : "attr1-1" , "attrVal" : "红色"}]},{"attrId":"attr2","attrName":"容量","attrVals":[{"attrVid" : "attr2-1" , "attrVal" : "16G"},{"attrVid" : "attr2-2" , "attrVal" : "32G"}]}]';
-	var initSkusExampleStr = '[{"skuId":"20001234","price":"10.01","salePrice":"9.9","attrVals":[{"attrVid":"attr1-1","attrVal":"红色"},{"attrVid":"attr2-1","attrVal":"16G"}],"stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]},{"skuId":"20001235","price":"11.01","salePrice":"8.9","attrVals":[{"attrVid":"attr2-2","attrVal":"32G"},{"attrVid":"attr1-1","attrVal":"红色"}],"stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]}]';
+	var initSkusExampleStr = '[{"skuId":"20001234","price":"10.01","salePrice":"9.9","status":"1","attrVals":[{"attrVid":"attr1-1","attrVal":"红色"},{"attrVid":"attr2-1","attrVal":"16G"}],"stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]},{"skuId":"20001235","price":"11.01","salePrice":"8.9","status":"0","attrVals":[{"attrVid":"attr2-2","attrVal":"32G"},{"attrVid":"attr1-1","attrVal":"红色"}],"stocks":[{"stockId":"123","stockName":"库存1"},{"stockId":"456","stockName":"库存2"}]}]';
 	var initAttrs = JSON.parse(initAttrExampleStr);
 	var initSkus = JSON.parse(initSkusExampleStr);
 
