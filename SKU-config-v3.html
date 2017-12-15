@@ -27,6 +27,13 @@
 	<label>属性ID</label><input id="attrId" />
 	<input id="del_attr" type="button" value="删除属性" />
 </div>
+<div class="replace_attr_form">
+	<label>需要替换的属性位置</label><input id="index" />
+	<label>新的属性ID</label><input id="attrId" />
+	<label>新的属性名</label><input id="attrName" />
+	<input id="replace_attr" type="button" value="替换属性" />
+</div>
+
 
 <div class="del_attrVal_form">
 	<label>属性ID</label><input id="attrId" />
@@ -151,6 +158,33 @@ $(function() {
 			if(typeof(refresh) == "undefined" || refresh){
 				refreshContainer();
 			}
+		};
+
+		this.fn.replaceAttrWithIndex = replaceAttrWithIndex;
+		//根据位置替换属性 index:替换的位置 从0开始
+		function replaceAttrWithIndex(index,attrId,attrName){
+			if(getAttrObj(attrId) != null){
+				console.log("addAttr => 属性("+attrId+")已存在");
+				return false;
+			}
+			var attrObj = {};
+			attrObj["attrId"] = attrId;
+			attrObj["attrName"] = attrName;
+			attrObj["attrVals"] = [];
+			if(typeof(attrs) == "undefined"){
+				attrs = [];
+			}
+			if(index >= attrs.length || index<0){
+				console.log("replaceAttrWithIndex => 索引("+index+")越界,max("+((attrs.length-1)>0?(attrs.length-1):(0))+") min(0)");
+				return false;
+			}
+
+			var delArrs = attrs.splice(index, 1 , attrObj);		
+			if(delArrs[0].attrVals.length > 0){
+				resetSkus();
+				refreshContainer();
+			}	
+			return true;
 		};
 
 		this.fn.addAttrVal = addAttrVal;
@@ -439,7 +473,6 @@ $(function() {
 		//初始化表格
 		function initTable(){
 			//先初始化属性组合
-			//var _this = this;
 			return {
 				//重置表格容器
 				reset : function(tbContainer){
@@ -629,6 +662,15 @@ $(function() {
 		cfg1.fn.delAttr(attrId);
 		//cfg2.fn.delAttr(attrId);
 	});
+
+	$("#replace_attr").click(function(){
+		var index = $('.replace_attr_form #index').val();
+		var attrId = $('.replace_attr_form #attrId').val();
+		var attrName = $('.replace_attr_form #attrName').val();
+		cfg1.fn.replaceAttrWithIndex(index,attrId,attrName);
+		//cfg2.fn.delAttr(attrId);
+	});
+
 
 	$("#del_attrVal").click(function(){
 		var attrId = $('.del_attrVal_form #attrId').val();
